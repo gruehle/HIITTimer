@@ -319,6 +319,20 @@
     }
     .step-editor-row select, .step-editor-row input { flex: 1; min-width: 0; }
     .step-editor-row .btn-icon { flex-shrink: 0; }
+    .step-switch-label {
+      flex-direction: row;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--muted);
+      flex-shrink: 0;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .step-switch-label input { cursor: pointer; accent-color: var(--exercise); }
 
     /* ── Timer view ── */
     .timer-container {
@@ -574,7 +588,7 @@ const DEFAULT_WORKOUTS = [
       { type: 'rest',     name: 'Rest',                    duration: 10 },
       { type: 'exercise', name: 'Push-Up with Rotation',   duration: 30 },
       { type: 'rest',     name: 'Rest',                    duration: 10 },
-      { type: 'exercise', name: 'Side Plank',              duration: 30 },
+      { type: 'exercise', name: 'Side Plank',              duration: 30, switchSides: true },
     ]
   },
   {
@@ -612,7 +626,6 @@ const DEFAULT_WORKOUTS = [
 let workouts = JSON.parse(localStorage.getItem('hiit_workouts') || 'null') || DEFAULT_WORKOUTS;
 let selectedWorkoutId = localStorage.getItem('hiit_selected') || (workouts[0]?.id ?? null);
 let editingWorkoutId = null;
-let wakeLock = null;  
 
 function saveWorkouts() {
   localStorage.setItem('hiit_workouts', JSON.stringify(workouts));
@@ -641,20 +654,7 @@ const views = document.querySelectorAll('.view');
 function switchTab(name) {
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
-  if (name === 'timer') {
-    renderTimerView();
-    if (wakeLock === null) {
-      try {
-        wakeLock = await navigator?.wakeLock.request("screen");
-      } catch (err) {
-        // ignore error, browser doesn't support waitLock
-      }
-    }
-  } else {
-    if (wakeLock !== null) {
-      await wakeLock.release();
-      wakeLock = null;
-    }
+  if (name === 'timer') renderTimerView();
 }
 
 tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
@@ -698,7 +698,7 @@ function renderWorkouts() {
             ? `<div class="step-rest-divider"><span>${s.duration}s rest</span></div>`
             : `<div class="step-exercise-row">
                  <span class="step-num">${w.steps.slice(0, i).filter(x => x.type === 'exercise').length + 1}</span>
-                 <span class="step-name">${escHtml(s.name)}</span>
+                 <span class="step-name">${escHtml(s.name)}${s.switchSides ? ' <span style="font-size:0.7rem;color:var(--muted);" title="Switch sides at midpoint">⇄</span>' : ''}</span>
                  <span class="step-dur">${s.duration}s</span>
                </div>`
           ).join('')}
@@ -795,6 +795,7 @@ function renderModalSteps() {
       </select>
       <input type="text" placeholder="Name" value="${escHtml(step.name)}" data-idx="${i}" data-field="name" />
       <input type="number" placeholder="Sec" value="${step.duration}" min="1" max="600" style="max-width:72px;" data-idx="${i}" data-field="duration" />
+      ${step.type === 'exercise' ? `<label class="step-switch-label" title="Announce switch sides at midpoint"><input type="checkbox" data-idx="${i}" data-field="switchSides" ${step.switchSides ? 'checked' : ''} />⇄</label>` : '<span style="width:36px;flex-shrink:0;"></span>'}
       <button class="btn-icon" data-idx="${i}" data-action="remove-step" title="Remove">✕</button>`;
     list.appendChild(row);
   });
@@ -803,10 +804,16 @@ function renderModalSteps() {
 document.getElementById('step-editor-list').addEventListener('input', e => {
   const { idx, field } = e.target.dataset;
   if (idx === undefined) return;
-  const val = field === 'duration' ? Math.max(1, parseInt(e.target.value) || 1) : e.target.value;
+  const val = field === 'duration' ? Math.max(1, parseInt(e.target.value) || 1)
+            : field === 'switchSides' ? e.target.checked
+            : e.target.value;
   modalSteps[parseInt(idx)][field] = val;
-  if (field === 'type' && val === 'rest' && modalSteps[parseInt(idx)].name === '') {
-    modalSteps[parseInt(idx)].name = 'Rest';
+  if (field === 'type') {
+    if (val === 'rest') {
+      if (modalSteps[parseInt(idx)].name === '') modalSteps[parseInt(idx)].name = 'Rest';
+      delete modalSteps[parseInt(idx)].switchSides;
+    }
+    renderModalSteps();
   }
 });
 
@@ -838,6 +845,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
     type: s.type,
     name: s.name || (s.type === 'rest' ? 'Rest' : 'Exercise'),
     duration: parseInt(s.duration) || 30,
+    ...(s.switchSides ? { switchSides: true } : {}),
   }));
 
   if (editingWorkoutId) {
@@ -892,6 +900,31 @@ function announceStep(step, nextStep) {
     speak(`Rest${next}`, true);
   }
 }
+
+// ─────────────────────────────────────────────
+// Wake Lock
+// ─────────────────────────────────────────────
+
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch (_) {}
+}
+
+function releaseWakeLock() {
+  wakeLock?.release();
+  wakeLock = null;
+}
+
+// Re-acquire after tab becomes visible again (wake lock is auto-released on hide)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && timerState.running) {
+    acquireWakeLock();
+  }
+});
 
 // ─────────────────────────────────────────────
 // Timer
@@ -1045,6 +1078,7 @@ function togglePlay() {
   timerState.running = !timerState.running;
   if (timerState.running) {
     timerState.interval = setInterval(tick, 1000);
+    acquireWakeLock();
     if (timerState.countdown === null) {
       announceStep(
         timerState.workout.steps[timerState.stepIndex],
@@ -1053,6 +1087,7 @@ function togglePlay() {
     }
   } else {
     clearInterval(timerState.interval);
+    releaseWakeLock();
     window.speechSynthesis?.cancel();
   }
   renderTimerUI();
@@ -1066,6 +1101,7 @@ function startWorkout() {
   timerState.running = true;
   timerState.countdown = 3;
   timerState.interval = setInterval(tick, 1000);
+  acquireWakeLock();
   speak('3', true);
   renderTimerUI();
 }
@@ -1094,7 +1130,10 @@ function tick() {
   if (timerState.timeLeft <= 0) {
     advanceStep();
   } else {
-    if (timerState.timeLeft <= 3) {
+    const step = timerState.workout.steps[timerState.stepIndex];
+    if (step.switchSides && timerState.timeLeft === Math.floor(step.duration / 2)) {
+      speak('Switch sides');
+    } else if (timerState.timeLeft <= 3) {
       speak(String(timerState.timeLeft));
     }
     renderTimerUI();
@@ -1122,6 +1161,7 @@ function restartStep() {
 
 function finishWorkout() {
   clearInterval(timerState.interval);
+  releaseWakeLock();
   timerState.running = false;
   timerState.done = true;
   speak('Workout complete! Great job!', true);
