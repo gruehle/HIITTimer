@@ -1009,7 +1009,7 @@ function renderTimerUI() {
       </div>
 
       <div class="timer-controls" style="justify-content:center;">
-        <button class="btn-control btn-play" id="btn-play" style="background:var(--muted);" title="Skip countdown">⏭</button>
+        <button class="btn-control btn-play" id="btn-play" style="background:var(--muted);" title="Skip countdown">⏭&#xFE0E;</button>
       </div>
     `;
     document.getElementById('btn-play').addEventListener('click', skipCountdown);
@@ -1055,9 +1055,9 @@ function renderTimerUI() {
     <div class="timer-controls">
       <button class="btn-control btn-secondary-ctrl" id="btn-restart-step" title="Restart step">↺</button>
       <button class="btn-control btn-play" id="btn-play" style="background:${ringColor};" title="${running ? 'Pause' : 'Play'}">
-        ${running ? '⏸' : '▶'}
+        ${running ? '⏸&#xFE0E;' : '▶&#xFE0E;'}
       </button>
-      <button class="btn-control btn-secondary-ctrl" id="btn-skip" title="Skip step">⏭</button>
+      <button class="btn-control btn-secondary-ctrl" id="btn-skip" title="Skip step">⏭&#xFE0E;</button>
     </div>
 
     ${nextStep ? `
