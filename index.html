@@ -645,7 +645,7 @@ function switchTab(name) {
     renderTimerView();
     if (wakeLock === null) {
       try {
-        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock = await navigator?.wakeLock.request("screen");
       } catch (err) {
         // ignore error, browser doesn't support waitLock
       }
