@@ -612,7 +612,7 @@ const DEFAULT_WORKOUTS = [
 let workouts = JSON.parse(localStorage.getItem('hiit_workouts') || 'null') || DEFAULT_WORKOUTS;
 let selectedWorkoutId = localStorage.getItem('hiit_selected') || (workouts[0]?.id ?? null);
 let editingWorkoutId = null;
-let waitLock = null;  
+let wakeLock = null;  
 
 function saveWorkouts() {
   localStorage.setItem('hiit_workouts', JSON.stringify(workouts));
@@ -643,17 +643,17 @@ function switchTab(name) {
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
   if (name === 'timer') {
     renderTimerView();
-    if (waitLock === null) {
+    if (wakeLock === null) {
       try {
-        waitLock = await navigator.waitLock.request("screen");
+        wakeLock = await navigator.wakeLock.request("screen");
       } catch (err) {
         // ignore error, browser doesn't support waitLock
       }
     }
   } else {
-    if (waitLock !== null) {
-      await waitLock.release();
-      waitLock = null;
+    if (wakeLock !== null) {
+      await wakeLock.release();
+      wakeLock = null;
     }
 }
 
