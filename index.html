@@ -612,6 +612,7 @@ const DEFAULT_WORKOUTS = [
 let workouts = JSON.parse(localStorage.getItem('hiit_workouts') || 'null') || DEFAULT_WORKOUTS;
 let selectedWorkoutId = localStorage.getItem('hiit_selected') || (workouts[0]?.id ?? null);
 let editingWorkoutId = null;
+let waitLock = null;  
 
 function saveWorkouts() {
   localStorage.setItem('hiit_workouts', JSON.stringify(workouts));
@@ -640,7 +641,20 @@ const views = document.querySelectorAll('.view');
 function switchTab(name) {
   tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   views.forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
-  if (name === 'timer') renderTimerView();
+  if (name === 'timer') {
+    renderTimerView();
+    if (waitLock === null) {
+      try {
+        waitLock = await navigator.waitLock.request("screen");
+      } catch (err) {
+        // ignore error, browser doesn't support waitLock
+      }
+    }
+  } else {
+    if (waitLock !== null) {
+      await waitLock.release();
+      waitLock = null;
+    }
 }
 
 tabBtns.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
